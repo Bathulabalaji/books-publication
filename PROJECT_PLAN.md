@@ -10,23 +10,25 @@ Use a modular monolith initially: React/TypeScript web client, FastAPI API, mana
 
 **Outcome:** A runnable, observable, testable skeleton with agreed MVP decisions.
 
-- Validate the PRD launch defaults before production: GST-exclusive display and invoice fields, 15-minute inventory/payment reservation, low-stock/no-backorder behavior, order cancellation/return/refund rules, exact role grants and Super Admin bootstrap, support ownership, deployment vendor, SLO/recovery feasibility, and cost limits.
+**Ticket backlog:** See [ticket-manager.md](./ticket-manager.md) for Phase 0 ticket IDs, dependencies, expected outputs, and acceptance criteria. Complete its exit-gate ticket before starting Phase 1.
+
+- Use the PRD decision register (DR-01–DR-13) as the single source of truth for launch assumptions, validation status, accountable owner, reviewer, proposed/confirmed target date, evidence, and production gates. Proposed dates are not commitments; assign the accountable roles to people and approve dates at kickoff.
 - Implement the attached permission matrix as the initial server-side ABAC policy and test every role/capability pair, including limited support views and assignment-scoped fulfillment.
 - Define domain boundaries, API error conventions, order/payment/inventory state machines, design tokens, and environments.
+- Workspace boundaries, dependency direction, API contract ownership, and package tooling are documented in [ARCHITECTURE.md](./ARCHITECTURE.md); the root npm workspace contains the web app, while the FastAPI package is independently locked with `uv`.
 - Define the initial role bundles (Super Admin, Admin, Catalog Manager, Order Manager, Fulfillment Staff, Support Agent, Customer), default-deny ABAC policy, staff assignment rules, audit requirements, and privileged-role step-up MFA.
-- Define the INR shipping tiers (merchandise subtotal before shipping/tax: <₹499 = ₹49; ₹499–₹999 = ₹29; ≥₹1,000 = free) and 5% GST as a pending tax-advisor validation, not a hard-coded legal conclusion.
-- Confirm MSG91, Amazon SES, optional Resend alternative, Razorpay, object storage/CDN, monitoring, and India-region capabilities/pricing.
-- Implement local/provider sandbox delivery for development; configure production provider adapters for MSG91 and SES/Resend with verified fallback and deduplication semantics. Use free tiers/credits only when eligible; do not make production reliability depend on no-cost quotas.
-- Record planning load bands from the PRD (5k/50k/250k monthly visitors; 50/200/1,000 concurrent users; 500/5k/25k books and orders/month) and derive test profiles rather than treating them as SLAs.
-- Validate 2x forecast peak concurrency for 30 minutes and a 3x five-minute campaign spike; verify 99.9% availability, first-party API p95 <500 ms, mobile LCP ≤2.5 seconds p75, RPO ≤15 minutes, and RTO ≤4 hours against chosen vendors. Set an approved monthly spend budget and 50/75/90/100% alerts.
-- Assign support ownership, publish IST business hours and response targets, configure WhatsApp Business, and review contact-form privacy/retention/escalation handling.
+- Implement provider adapter behavior from DR-08 with local/sandbox delivery for development and verified fallback/deduplication semantics. Use free tiers/credits only when eligible; do not make production reliability depend on no-cost quotas.
+- Evaluate Razorpay, object storage/CDN, monitoring, and India-region capabilities/pricing as part of the relevant launch validation; do not provision live credentials in Phase 0.
+- Record the PRD Section 11 planning load bands and derive test profiles rather than treating them as SLAs.
+- Validate the proposed load/SLO/recovery targets in DR-10 against measured load and chosen vendors. Set an approved monthly spend budget and the DR-10 alert thresholds before production.
+- Resolve DR-11 through DR-13: assign support ownership, approve/publish proposed business hours and response targets, configure WhatsApp Business, and review contact-form privacy/retention/escalation handling.
 - Complete accessibility, privacy, India consumer/tax/payment, security, and retention reviews with qualified specialists before production.
 - Create React/TypeScript/Tailwind/shadcn and FastAPI application skeletons, PostgreSQL migrations, Redis connection conventions, health endpoints, config validation, and CI.
 - Establish typed API contract generation or equivalent contract checks; add lint, format, type-check, unit, integration, and frontend test runners.
 - Add structured redacted logging, request IDs, metrics hooks, secret handling, and safe local development settings.
-- **Frontend:** Shared app shell, responsive navigation, accessible component baseline, API client/error/loading patterns, and stub pages for agreed journeys.
-- **Backend:** Versioned API shell, configuration, DB session/migration setup, health/readiness endpoints, and standard auth/error/validation extension points.
-- **Tests:** CI smoke test; health/readiness; config validation; DB migration smoke; API contract and frontend shell tests.
+- **Frontend:** P0-03 establishes a responsive React/Tailwind shell, keyboard skip link, semantic landmarks, home/not-found routes, and route loading/error fallbacks. Public API-origin config is validated at bootstrap; frontend checks run through shared npm scripts.
+- **Backend:** P0-04 provides a testable FastAPI factory, validated `PUSTORA_` settings, `/api/v1` system-health route, server-generated request IDs, normalized validation/application/HTTP errors, and redacted unexpected-error logging. Database session/migration setup remains in P0-05.
+- **Tests:** CI smoke test; P0-04 API factory, versioned health/OpenAPI, settings, validation, expected/unexpected errors and correlation; DB migration smoke; frontend shell tests.
 
 **Exit gate:** Fresh setup instructions work; CI passes; migrations apply to an empty DB; both apps run locally; no secrets are committed; the permission matrix and state transitions have owners and tests; production-critical legal/vendor/budget decisions have accountable owners and dates.
 
@@ -37,8 +39,7 @@ Use a modular monolith initially: React/TypeScript web client, FastAPI API, mana
 - Implement only email/password, Google OIDC, and phone OTP through provider adapters. Use Argon2id for passwords; verify identifiers; handle safe account linking, rate limits, login monitoring, session management, recovery, and account enumeration defenses.
 - Implement HttpOnly/Secure/SameSite cookies, CSRF defenses, refresh-token rotation/revocation, and one-time hashed recovery codes.
 - Make customer MFA optional; require privileged-role step-up MFA and designated sensitive-action verification using a second independent supported factor: mobile OTP after email/password or Google sign-in, and password after mobile OTP sign-in. Do not grant privileged access without the independent factor or treat one phone OTP challenge as both primary authentication and a second factor.
-- Integrate MSG91 via an OTP adapter. Enforce initial policy of six digits, five-minute validity, 30–60-second resend cooldown, five verify attempts, and five sends/hour/identifier plus IP/device/identifier abuse limits. OTPs are hash-only.
-- Add provider-adapted transactional email using Amazon SES, with Resend as a configurable alternative for verification and password reset messages. Use development sandboxes/no-cost allowances only where eligible; verify sender/domain, current quotas, and pricing before enabling production traffic.
+- Implement OTP and transactional-email adapters using the selected providers and policies in DR-08; enforce the OTP security parameters defined in the PRD identity requirements. Use development sandboxes/local delivery; verify sender/domain, quotas, pricing, and eligibility before production.
 - Implement explicit notification fallback semantics: fallback on definitive provider rejection/unavailability; on ambiguous timeout reconcile status first. Reuse the same active OTP challenge on fallback, and apply logical-notification idempotency to prevent duplicate email/SMS sends.
 - Define principal attributes, permission bundles, role/assignment management model, default-deny policy evaluator, audit events, and purpose-specific response schemas.
 - **Frontend:** Registration/login/provider flows, MFA setup/challenge/recovery, session/account security screens, accessible error handling, role-aware navigation and unauthorized/forbidden states.
@@ -78,16 +79,15 @@ Use a modular monolith initially: React/TypeScript web client, FastAPI API, mana
 
 - Finalize delivery address validation, order price snapshot, INR shipping tier calculation, GST treatment, inventory reservation TTL, order/payment state machine, idempotency strategy, and exception handling.
 - Build cart and order-creation APIs with transactional consistency and authoritative server price calculation. Checkout requires authentication.
-- Display book prices exclusive of GST and disclose GST plus final payable total before payment. Shipping uses the merchandise subtotal before shipping/tax: <₹499 = ₹49; ₹499–₹999 = ₹29; ≥₹1,000 = free.
-- Implement ledger-backed reservation and release with a 15-minute default TTL: reserve during checkout; release on payment failure/expiry; on verified payment consume the reservation without a second available-stock deduction; cancellation before dispatch releases eligible stock; write actor/reason-backed adjustments for damage and corrections. Prevent overselling under concurrent checkout using transactional atomic updates/locking.
-- Expire the payment attempt after 15 minutes. A late verified success must atomically re-reserve if stock remains; otherwise enter reconciliation and refund rather than silently overselling.
-- Disallow backorders; use a configurable low-stock threshold (default five units), with exact counts hidden unless enabled by the publisher. Out-of-stock products cannot be purchased.
+- Display catalog prices, GST, final payable amount, shipping, inventory, and payment expiry according to PRD decisions DR-01, DR-02, DR-04, and DR-05.
+- Implement ledger-backed reservation, release, sold conversion, late-payment handling, and actor/reason-backed adjustments according to DR-04. Prevent overselling under concurrent checkout using transactional atomic updates/locking.
+- Enforce the DR-05 no-backorder and low-stock rules server-side; exact display behavior follows the register.
 - Implement invoice generation from immutable order and tax snapshots. Provide multiple invoice template options with admin selection and versioned templates; preserve the issued template version and invoice values. Obtain tax review for applicable GST, required fields, numbering, and final layouts before production.
-- Apply cancellation/refund policy by current server-side order/fulfillment state: payment pending and paid/not processed allow cancellation; processing allows cancellation only before picking/packing; after picking/packing route to support without promising cancellation; dispatched follows approved return policy; delivered allows a seven-calendar-day damaged/defective/incomplete/wrong-book request window, subject to law; refund progress is visible. Change-of-mind return is not offered by default, pending legal review.
+- Apply cancellation, return, refund and state transitions according to DR-06. Enforce eligibility server-side; do not promise terms that remain subject to legal review.
 - Integrate Razorpay sandbox first: server-created payment order, browser checkout, signature verification, verified webhook endpoint, durable event/idempotency handling, and reconciliation tooling.
 - **Frontend:** Cart, quantity/removal, address and order summary with shipping/GST breakdown, Razorpay checkout handoff, pending/success/failure states, invoice template preview/selection for authorized admin, retry-safe UX, and support links.
 - **Backend:** Cart/order/payment/invoice models and APIs, inventory ledger/reservation service, transaction boundaries, configurable shipping/tax calculation, invoice rendering/template versioning, gateway adapter, signature/webhook verification, asynchronous follow-up, and admin reconciliation view.
-- **Tests:** Price tampering, GST-exclusive UI and shipping boundaries (<₹499, ₹499, ₹999, ₹1,000), tax calculation and rounding, duplicate cart/order submissions, concurrent stock reservation/no oversell, reservation expiry/release, low-stock threshold, no-backorder enforcement, payment success/failure/cancel, forged signature, invalid/duplicate/out-of-order webhook, late payment with and without available stock, cancellation eligibility by picking/packing state, return/refund-case state transitions, invoice snapshot/template versioning, refund bookkeeping, and transactional rollback.
+- **Tests:** Price tampering; GST-exclusive display and all DR-01 shipping boundaries; DR-02 tax calculation/rounding; duplicate cart/order submissions; concurrent stock reservation/no oversell; DR-04 reservation expiry/release and late payment with/without stock; DR-05 low-stock and no-backorder enforcement; payment success/failure/cancel; forged signature; invalid/duplicate/out-of-order webhook; DR-06 cancellation eligibility and return/refund state transitions; invoice snapshot/template versioning; refund bookkeeping; transactional rollback.
 
 **Exit gate:** Sandbox purchases reconcile to exactly one correct order; forged or duplicate notifications cannot mark a payment paid twice; customer-facing totals match the server order snapshot; parallel checkout cannot oversell; expired/failed payments release reservations; invoices preserve their issued values/template; exception cases are visible to staff; tax and invoice decisions are approved before live payments. The cancellation and return policy is legally reviewed before launch.
 
@@ -97,10 +97,9 @@ Use a modular monolith initially: React/TypeScript web client, FastAPI API, mana
 
 - Implement order history/detail APIs scoped to owner and staff permissions; establish legal status transitions and append-only tracking events.
 - Implement assignment-aware staff queues and customer-safe status/location messages, actor/time recording, and admin correction audit flow.
-- Integrate background notification processing with PostgreSQL delivery events for order confirmation, payment outcome, processing, dispatch, delivery, refund, and account-security events. Use SES/Resend email adapter; keep marketing consent/unsubscribe separate.
+- Integrate background notification processing with PostgreSQL delivery events for order confirmation, payment outcome, processing, dispatch, delivery, refund, and account-security events. Use provider choices/fallbacks from DR-08; keep marketing consent/unsubscribe separate.
 - Add customer support entry points for support email, WhatsApp Business, and contact form, with restricted access to submissions and customer data.
-- Publish support hours Monday–Friday, 09:00–18:00 IST excluding published holidays; target acknowledgement within one business day and update/resolution within two business days. Priority-triage payment/account-security/privacy incidents within four business hours. Assign a human case owner, severity/status, timestamps, and overdue escalation.
-- Use WhatsApp Business initially as a human-operated channel. Contact forms collect minimum necessary data, display a privacy notice, and default to 12-month retention after case closure unless a legal/dispute hold applies.
+- Implement the support operating model, hours, response targets, contact-form handling, and retention according to DR-11 through DR-13. Keep WhatsApp Business human-operated initially.
 - **Frontend:** Customer orders list/detail/timeline, cancellation/refund status, accessible support links/contact form, and staff queue/order update screens; hide unavailable actions while handling server denials safely.
 - **Backend:** Owner-scoped APIs, staff assignment/ABAC checks, status transition service, tracking event persistence, customer-safe DTOs, notification provider adapters/worker, durable delivery-event tracking, contact-form handling, and audit trail.
 - **Tests:** Own-order access, IDOR/cross-customer denial, staff assigned/unassigned behavior, transition validity, cancellation policy by state, immutable history/correction, private-note redaction, notification retry/idempotency/consent separation, contact-form abuse controls, and concurrent updates.
@@ -112,10 +111,10 @@ Use a modular monolith initially: React/TypeScript web client, FastAPI API, mana
 **Outcome:** The integrated storefront is supportable and safe to release to real customers.
 
 - Complete end-to-end regression, dependency/security review, threat-model follow-ups, access review, and secrets/configuration review.
-- Validate Google, MSG91 OTP, SES/Resend email, Razorpay production setup, webhook retries, inventory reconciliation, refund/support operations, backup/restore, data retention, and incident escalation.
+- Validate Google and DR-08 provider setup, Razorpay production configuration, webhook retries, inventory reconciliation, refund/support operations, backup/restore, data retention, and incident escalation.
 - Add dashboards/alerts for availability, API errors/latency, auth abuse, webhook lag/reconciliation, queue failures, database capacity, provider quotas/delivery failures, and budget thresholds.
 - Run WCAG 2.2 AA and responsive reviews, load tests against the agreed traffic bands, and recovery drills; tune measured bottlenecks. Validate keyboard-only navigation, labels/errors, contrast, screen-reader semantics, image alt text, captions/transcripts, and PDF alternatives where feasible.
-- Run campaign load profiles (2x forecast peak concurrency for 30 minutes, then 3x for five minutes); verify initial SLO and RPO/RTO targets with the selected service tiers.
+- Run the campaign load profile and verify the proposed SLO/RPO/RTO targets in DR-10 against measured results and selected service tiers.
 - Exercise support operations during and outside published business hours: contact acknowledgement, severity assignment, overdue escalation, WhatsApp Business handoff, retention/deletion, and privacy incident handling.
 - **Frontend:** Complete keyboard/screen-reader/responsive review; production analytics with privacy controls; error/support guidance; release smoke tests.
 - **Backend:** Harden deployment, database connection/pool limits, rate limits, worker retries/dead letters, backup/restore, observability, and rollout/rollback procedure.

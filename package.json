@@ -1,0 +1,25 @@
+{
+  "name": "pustora-platform",
+  "private": true,
+  "packageManager": "npm@11.20.0",
+  "engines": {
+    "node": ">=22.12.0 <27",
+    "npm": ">=10"
+  },
+  "workspaces": [
+    "apps/web"
+  ],
+  "scripts": {
+    "workspace:check": "npm ls --workspaces --depth=0 && uv lock --directory apps/api --check",
+    "web:dev": "npm run dev --workspace @pustora/web",
+    "web:build": "npm run build --workspace @pustora/web",
+    "web:typecheck": "npm run typecheck --workspace @pustora/web",
+    "web:test": "npm run test --workspace @pustora/web",
+    "api:sync": "uv sync --directory apps/api --locked --group dev",
+    "api:dev": "uv run --directory apps/api uvicorn pustora_api.main:app --reload",
+    "api:test": "uv run --directory apps/api --group dev pytest",
+    "api:lint": "uv run --directory apps/api --group dev ruff check .",
+    "api:format:check": "uv run --directory apps/api --group dev ruff format --check .",
+    "api:lock:check": "uv lock --directory apps/api --check"
+  }
+}
