@@ -18,7 +18,7 @@ contracts/             API schema ownership and generated-client policy
 - `apps/web` owns routes, feature composition, accessible UI, and the typed API client. Feature code may depend on app-level shared UI/API utilities; shared utilities must not import feature modules. The P0-03 shell uses React Router, Vite, Tailwind CSS, and route-level loading/error/not-found states.
 - `apps/api` owns HTTP composition and domain modules. Its P0-04 application factory composes settings, versioned routers, request correlation, and normalized error handling. Route handlers translate HTTP input/output and call application services; domain rules must not depend on FastAPI, database drivers, or cloud/provider SDKs.
 - Application services depend on domain rules and declared ports. Infrastructure adapters implement those ports and are composed at the API boundary. Do not let domain modules import another module's persistence internals.
-- Keep persistence migrations under the API package and database-facing code in infrastructure adapters. Database schema changes are reviewed and versioned; do not make DDL a startup side effect.
+- Keep persistence migrations under the API package and database-facing code in infrastructure adapters. SQLAlchemy async engines are application-scoped, sessions are request-scoped, and migrations are reviewed/versioned explicit Alembic commands; do not make connections or DDL an import/startup side effect.
 - The browser consumes only documented API schemas. It must not import Python code, database models, provider SDKs, or server configuration.
 - No shared runtime package is needed yet. Share API shapes through generated TypeScript from the backend OpenAPI document, not by duplicating handwritten DTOs or importing implementation models across runtimes.
 
@@ -54,7 +54,7 @@ Local tests must use explicit test settings and isolated resources. Production d
 
 - Frontend tests live alongside the feature or shared module they exercise; end-to-end tests belong in the dedicated test layer once selected in Phase 0.
 - Backend tests live in `apps/api/tests`, grouped by unit, API/integration, and policy concerns. Use isolated test configuration and never default to production data.
-- Backend schema migrations live under `apps/api`; they are authored and applied by the migration tool selected in P0-05. Migrations are explicit commands, never import/startup side effects.
+- Backend schema migrations live under `apps/api/migrations`; Alembic revisions are explicit commands, never import/startup side effects. Tests use explicit test settings and do not inherit application database URLs.
 
 ## Deliberate non-goals
 

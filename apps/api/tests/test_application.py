@@ -1,12 +1,16 @@
+import asyncio
 import logging
 from uuid import UUID
 
 from _pytest.logging import LogCaptureFixture
+from fastapi import Request
 from fastapi.testclient import TestClient
 from pydantic import ValidationError
 from pytest import MonkeyPatch
+from sqlalchemy.exc import SQLAlchemyError
 
 from pustora_api.config import Settings
+from pustora_api.database import get_db_session
 from pustora_api.errors import ApplicationError
 from pustora_api.main import create_app
 
@@ -44,6 +48,32 @@ def test_settings_reject_invalid_environment() -> None:
         raise AssertionError("Invalid environment should fail settings validation.")
 
 
+def test_staging_and_production_require_database_url() -> None:
+    for environment in ("staging", "production"):
+        try:
+            Settings(environment=environment)
+        except ValidationError as exc:
+            assert "PUSTORA_DATABASE_URL" in str(exc)
+        else:
+            raise AssertionError(f"{environment} must require PUSTORA_DATABASE_URL.")
+
+
+def test_database_url_is_validated_and_secret_is_not_repr_exposed() -> None:
+    settings = Settings(
+        environment="local",
+        database_url="postgresql+asyncpg://pustora:secret-value@localhost:5432/pustora_local",
+    )
+
+    assert "secret-value" not in repr(settings)
+
+    try:
+        Settings(environment="local", database_url="sqlite:///not-postgres.db")
+    except ValidationError as exc:
+        assert "postgresql+asyncpg" in str(exc)
+    else:
+        raise AssertionError("Non-PostgreSQL URLs must be rejected.")
+
+
 def test_openapi_metadata_and_paths_are_versioned() -> None:
     client = TestClient(create_app(Settings(environment="test")))
 
@@ -54,6 +84,7 @@ def test_openapi_metadata_and_paths_are_versioned() -> None:
     assert schema["info"]["title"] == "PUSTORA API"
     assert schema["info"]["version"] == "0.1.0"
     assert "/api/v1/health" in schema["paths"]
+    assert "/api/v1/ready" in schema["paths"]
     assert not any(path in schema["paths"] for path in ("/login", "/books", "/orders"))
 
 
@@ -146,3 +177,158 @@ def test_not_found_response_does_not_expose_framework_detail() -> None:
     assert response.json()["error"]["code"] == "NOT_FOUND"
     assert response.json()["error"]["message"] == "Resource not found."
     assert response.json()["error"]["request_id"] == response.headers["x-request-id"]
+
+
+def test_readiness_without_database_is_a_safe_503() -> None:
+    client = TestClient(create_app(Settings(environment="test")))
+
+    response = client.get("/api/v1/ready")
+
+    assert response.status_code == 503
+    assert response.json()["error"]["code"] == "DATABASE_NOT_CONFIGURED"
+    assert response.json()["error"]["message"] == "Database service is unavailable."
+    assert "database_url" not in response.text
+
+
+class FakeDatabaseConnection:
+    async def execute(self, statement: object) -> None:
+        self.statement = str(statement)
+
+
+class FakeDatabaseConnectionContext:
+    def __init__(self, *, error: Exception | None = None) -> None:
+        self.error = error
+        self.connection = FakeDatabaseConnection()
+        self.closed = False
+
+    async def __aenter__(self) -> FakeDatabaseConnection:
+        if self.error is not None:
+            raise self.error
+        return self.connection
+
+    async def __aexit__(self, *exc_info: object) -> None:
+        self.closed = True
+
+
+class FakeDatabaseEngine:
+    def __init__(self, *, error: Exception | None = None) -> None:
+        self.connection_context = FakeDatabaseConnectionContext(error=error)
+
+    def connect(self) -> FakeDatabaseConnectionContext:
+        return self.connection_context
+
+
+def test_readiness_executes_query_and_returns_only_service_status() -> None:
+    app = create_app(Settings(environment="test"))
+    engine = FakeDatabaseEngine()
+    app.state.db_engine = engine
+
+    response = TestClient(app).get("/api/v1/ready")
+
+    assert response.status_code == 200
+    assert response.json() == {"status": "ok", "service": "pustora-api"}
+    assert engine.connection_context.connection.statement == "SELECT 1"
+    assert engine.connection_context.closed
+
+
+def test_readiness_database_failure_is_redacted_and_logged(
+    caplog: LogCaptureFixture,
+) -> None:
+    app = create_app(Settings(environment="test"))
+    app.state.db_engine = FakeDatabaseEngine(
+        error=SQLAlchemyError("postgres://user:secret@host/database"),
+    )
+
+    with caplog.at_level(logging.ERROR, logger="pustora.api"):
+        response = TestClient(app).get("/api/v1/ready")
+
+    assert response.status_code == 503
+    assert response.json()["error"]["code"] == "DATABASE_UNAVAILABLE"
+    assert "secret" not in response.text
+    assert "secret" not in caplog.text
+    assert response.headers["x-request-id"] in caplog.text
+
+
+class FakeSession:
+    def __init__(self) -> None:
+        self.rollback_count = 0
+
+    async def rollback(self) -> None:
+        self.rollback_count += 1
+
+
+class FakeSessionContext:
+    def __init__(self) -> None:
+        self.session = FakeSession()
+        self.closed = False
+
+    async def __aenter__(self) -> FakeSession:
+        return self.session
+
+    async def __aexit__(self, *exc_info: object) -> None:
+        self.closed = True
+
+
+class FakeSessionFactory:
+    def __init__(self) -> None:
+        self.context = FakeSessionContext()
+
+    def __call__(self) -> FakeSessionContext:
+        return self.context
+
+
+def test_database_session_is_closed_after_successful_request() -> None:
+    app = create_app(Settings(environment="test"))
+    factory = FakeSessionFactory()
+    app.state.db_session_factory = factory
+    request = Request({"type": "http", "app": app, "state": {}})
+    dependency = get_db_session(request)
+
+    async def exercise_session() -> None:
+        assert await anext(dependency) is factory.context.session
+        try:
+            await anext(dependency)
+        except StopAsyncIteration:
+            pass
+
+    asyncio.run(exercise_session())
+
+    assert factory.context.closed
+    assert factory.context.session.rollback_count == 0
+
+
+def test_database_session_rolls_back_and_closes_after_request_error() -> None:
+    app = create_app(Settings(environment="test"))
+    factory = FakeSessionFactory()
+    app.state.db_session_factory = factory
+    request = Request({"type": "http", "app": app, "state": {}})
+    dependency = get_db_session(request)
+
+    async def exercise_failed_session() -> None:
+        assert await anext(dependency) is factory.context.session
+        try:
+            await dependency.athrow(RuntimeError("request failed"))
+        except RuntimeError as exc:
+            assert str(exc) == "request failed"
+
+    asyncio.run(exercise_failed_session())
+
+    assert factory.context.session.rollback_count == 1
+    assert factory.context.closed
+
+
+def test_database_session_fails_closed_when_not_configured() -> None:
+    app = create_app(Settings(environment="test"))
+    request = Request({"type": "http", "app": app, "state": {}})
+    dependency = get_db_session(request)
+
+    async def exercise_unconfigured_session() -> None:
+        try:
+            await anext(dependency)
+        except ApplicationError as exc:
+            assert exc.code == "DATABASE_NOT_CONFIGURED"
+            assert exc.status_code == 503
+        else:
+            raise AssertionError("Database session must fail closed when no factory is configured.")
+
+    asyncio.run(exercise_unconfigured_session())

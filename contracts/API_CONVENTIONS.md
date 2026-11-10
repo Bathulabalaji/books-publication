@@ -4,7 +4,8 @@
 
 - Product API routes use `/api/v1/...`; a breaking contract change requires a new major path version.
 - FastAPI owns the OpenAPI document at `/openapi.json`. The API title is `PUSTORA API`; `0.1.0` is the current application/API implementation version, not a promise of contract stability beyond these conventions.
-- The Phase 0 health endpoint is `GET /api/v1/health`. It reports only service status and configured service name; it is not a dependency readiness or production availability guarantee.
+- The Phase 0 liveness endpoint is `GET /api/v1/health`. It reports only service status and configured service name; it does not prove dependencies are ready or promise production availability.
+- `GET /api/v1/ready` checks PostgreSQL with `SELECT 1`; database absence/unavailability returns a normalized 503 without connection details.
 - Unknown routes return a documented 404 error. No product operation is stubbed as a success response.
 - Local development uses FastAPI's `/docs` and `/redoc` pages; the machine-readable contract is `/openapi.json`.
 

@@ -1,14 +1,20 @@
 import logging
 from collections.abc import Mapping
+from contextlib import asynccontextmanager
 from typing import Any
 
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
+from sqlalchemy.ext.asyncio import AsyncEngine
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from pustora_api.api.v1.router import router as v1_router
 from pustora_api.config import Settings, get_settings
+from pustora_api.database import (
+    create_database_engine,
+    create_session_factory,
+)
 from pustora_api.errors import ApplicationError, error_response
 from pustora_api.middleware import RequestIdMiddleware
 
@@ -45,6 +51,16 @@ def _validation_details(exc: RequestValidationError) -> list[dict[str, Any]]:
 
 def create_app(settings: Settings | None = None) -> FastAPI:
     app_settings = settings or get_settings()
+
+    @asynccontextmanager
+    async def lifespan(application: FastAPI):
+        try:
+            yield
+        finally:
+            engine: AsyncEngine | None = application.state.db_engine
+            if engine is not None:
+                await engine.dispose()
+
     application = FastAPI(
         title="PUSTORA API",
         summary="API for the PUSTORA books publication platform.",
@@ -55,8 +71,15 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         openapi_url="/openapi.json",
         docs_url="/docs",
         redoc_url="/redoc",
+        lifespan=lifespan,
     )
     application.state.settings = app_settings
+    application.state.db_engine = create_database_engine(app_settings)
+    application.state.db_session_factory = (
+        create_session_factory(application.state.db_engine)
+        if application.state.db_engine is not None
+        else None
+    )
     application.add_middleware(RequestIdMiddleware)
     application.include_router(v1_router, prefix="/api/v1")
 

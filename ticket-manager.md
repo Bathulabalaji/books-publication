@@ -147,8 +147,7 @@ Create the FastAPI application factory/entry point, versioned API namespace, con
 ---
 
 ## P0-05 — Establish PostgreSQL connectivity and migration baseline
-
-**Status:** Proposed  
+**Status:** Complete — 2026-11-10
 **Priority:** P0 — Foundation  
 **Tags:** `backend`, `db`
 
@@ -171,6 +170,8 @@ Set up the PostgreSQL driver/session lifecycle and a migration tool appropriate 
 - No business schema is added without an accepted domain contract and phase scope.
 
 **Dependencies:** P0-02, P0-04.
+
+**Implementation:** Added validated secret PostgreSQL URL configuration (`postgresql+asyncpg`), application-scoped async engine disposal, request-scoped async sessions with rollback/close behavior, and `/api/v1/ready` with a safe `SELECT 1` check. Added an empty Alembic baseline, SQLAlchemy metadata base, and explicit upgrade/current/history/check/revision commands. Tests use explicit test settings and fakes, never the configured application database. A temporary isolated PostgreSQL 18 database was migrated from empty to head; only `alembic_version` was created.
 
 ---
 

@@ -27,8 +27,8 @@ Use a modular monolith initially: React/TypeScript web client, FastAPI API, mana
 - Establish typed API contract generation or equivalent contract checks; add lint, format, type-check, unit, integration, and frontend test runners.
 - Add structured redacted logging, request IDs, metrics hooks, secret handling, and safe local development settings.
 - **Frontend:** P0-03 establishes a responsive React/Tailwind shell, keyboard skip link, semantic landmarks, home/not-found routes, and route loading/error fallbacks. Public API-origin config is validated at bootstrap; frontend checks run through shared npm scripts.
-- **Backend:** P0-04 provides a testable FastAPI factory, validated `PUSTORA_` settings, `/api/v1` system-health route, server-generated request IDs, normalized validation/application/HTTP errors, and redacted unexpected-error logging. Database session/migration setup remains in P0-05.
-- **Tests:** CI smoke test; P0-04 API factory, versioned health/OpenAPI, settings, validation, expected/unexpected errors and correlation; DB migration smoke; frontend shell tests.
+- **Backend:** P0-04 provides a testable FastAPI factory, validated `PUSTORA_` settings, `/api/v1` system-health route, server-generated request IDs, normalized validation/application/HTTP errors, and redacted unexpected-error logging. P0-05 adds async PostgreSQL connection/session management, database readiness, and explicit Alembic migrations.
+- **Tests:** CI smoke test; P0-04 API factory, versioned health/OpenAPI, settings, validation, expected/unexpected errors and correlation; P0-05 isolated session/readiness tests and clean-database migration smoke; frontend shell tests.
 
 **Exit gate:** Fresh setup instructions work; CI passes; migrations apply to an empty DB; both apps run locally; no secrets are committed; the permission matrix and state transitions have owners and tests; production-critical legal/vendor/budget decisions have accountable owners and dates.
 
